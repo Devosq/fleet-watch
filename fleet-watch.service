@@ -1,0 +1,25 @@
+[Unit]
+Description=Fleet Watch morning verification report
+# Triggered by fleet-watch.timer — enable the TIMER, not this service:
+#   systemctl enable --now fleet-watch.timer
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Replace 'oscar' with the actual Ubuntu username (needs the vps2 SSH key)
+User=oscar
+WorkingDirectory=/opt/fleet-watch
+EnvironmentFile=/opt/fleet-watch/fleet-watch.env
+ExecStart=/usr/bin/python3 /opt/fleet-watch/fleet_watch.py --config /opt/fleet-watch/config.json
+# Exit 1 = checks FAILed but the report was delivered — not a service failure
+SuccessExitStatus=0 1
+# Hardening — read-only workload holding DB URLs + a bot token
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# read-only home still allows reading ~/.ssh keys + known_hosts
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

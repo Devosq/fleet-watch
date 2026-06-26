@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Fleet Watch daily at 07:00 Helsinki
+
+[Timer]
+# Timezone suffix requires systemd >= 240 (Ubuntu 20.04+)
+OnCalendar=*-*-* 07:00:00 Europe/Helsinki
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

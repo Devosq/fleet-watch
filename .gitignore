@@ -1,0 +1,12 @@
+# Python caches / bytecode
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+
+# Secrets — real Telegram token + Supabase connection strings. NEVER commit.
+fleet-watch.env
+
+# Local runtime config — contains trusted SQL + real jobnames. NEVER commit.
+# config.example.json is the committed template and stays tracked.
+config.json

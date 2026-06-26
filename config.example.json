@@ -1,0 +1,58 @@
+{
+  "_note": "Copy to config.json and adjust. Job names / SQL must match real prod state — verify with 'SELECT jobname FROM cron.job;' before enabling. HTTP checks already covered by Uptime Kuma belong in Kuma, not here; this tool's unique value is DB-level checks.",
+  "telegram": {
+    "token_env": "FLEET_TELEGRAM_BOT_TOKEN",
+    "chat_id_env": "FLEET_TELEGRAM_CHAT_ID"
+  },
+  "checks": [
+    {
+      "type": "pg_cron",
+      "name": "oscar-csuite pg_cron (wtmfrxwidtxyhjgmptuj)",
+      "db_url_env": "CSUITE_DB_URL",
+      "expect_active": [],
+      "stale_after_hours": {},
+      "_note": "Fill expect_active with real jobnames from cron.job (e.g. scout/score/brief crons). csuite-dipwork-daily-outreach is intentionally active=false — do NOT list it until enabled. stale_after_hours per job, e.g. {\"csuite-scout\": 30}."
+    },
+    {
+      "type": "freshness",
+      "name": "csuite opportunities freshness",
+      "db_url_env": "CSUITE_DB_URL",
+      "timestamp_sql": "SELECT max(created_at) FROM opportunities",
+      "max_age_hours": 96,
+      "_note": "Would have caught the scout outage of 2026-05-21..06-04 within 4 days."
+    },
+    {
+      "type": "pg_cron",
+      "name": "Xyven TJ pg_cron",
+      "db_url_env": "TJ_DB_URL",
+      "expect_active": [],
+      "stale_after_hours": {},
+      "_note": "TJ crons failed silently for weeks before 2026-05-23 fix — list them here."
+    },
+    {
+      "type": "freshness",
+      "name": "TJ churn_scores freshness",
+      "db_url_env": "TJ_DB_URL",
+      "timestamp_sql": "SELECT max(updated_at) FROM churn_scores",
+      "max_age_hours": 36,
+      "_note": "Verify column name (updated_at vs created_at) against real schema first."
+    },
+    {
+      "type": "ssh_file_age",
+      "name": "addwork-prod offsite backup on VPS2",
+      "host": "vps2",
+      "path": "/REPLACE/backup/path",
+      "max_age_hours": 26,
+      "disabled": true,
+      "_note": "Set the real offsite backup dir on VPS2, then remove 'disabled'."
+    },
+    {
+      "type": "ssh_ok",
+      "name": "VPS2 ollama container running",
+      "host": "vps2",
+      "command": "docker ps --filter name=ollama --filter status=running -q | grep -q .",
+      "disabled": true,
+      "_note": "Enable only if not already monitored by Uptime Kuma."
+    }
+  ]
+}
