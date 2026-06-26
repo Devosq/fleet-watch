@@ -69,4 +69,4 @@ ruff check .
 ```
 
 ## License
-[MIT](./LICENSE) (c) Devosq
+[MIT](./LICENSE) (c) Oscar Vatanen
