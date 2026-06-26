@@ -11,7 +11,7 @@ import fleet_watch as fw
 class TestPgCron(unittest.TestCase):
     CFG = {
         "type": "pg_cron",
-        "name": "csuite pg_cron",
+        "name": "example pg_cron",
         "db_url_env": "X_DB",
         "expect_active": ["scout-job"],
         "stale_after_hours": {"scout-job": 24},
