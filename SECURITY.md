@@ -1,18 +1,13 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
+Please report security issues privately via GitHub Security Advisories
+("Report a vulnerability" on the Security tab) rather than a public issue.
+You'll get a response within a few days.
 
-These repositories are shared privately. If you discover leaked credentials,
-secrets, or any sensitive data in this repo, **do not open a public issue**.
-Contact the repository owner directly so it can be rotated and removed.
-
-## Supported Versions
-
-Only the `main` branch is maintained.
-
-## Secrets discipline
-
-This repo is sanitized: no API keys, tokens, IP addresses, project IDs, or
-`.env` files are committed. Real values are replaced with placeholders
-(e.g. `<VPS1_IP>`, `<SUPABASE_PROJECT_REF>`, `<USERNAME>`). If you fork or
-adapt this, keep your own secrets in `.env` (git-ignored) and never commit them.
+## Scope notes
+- Secrets live in `.env` (git-ignored). Never commit real tokens.
+- Repo descriptions fetched from GitHub are treated as untrusted input: they are
+  delimited in the LLM prompt, URLs are stripped from model output, and all
+  fields are HTML-escaped before rendering. Still, always inspect a recommended
+  repo yourself before cloning it.

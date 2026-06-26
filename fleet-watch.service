@@ -7,8 +7,8 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-# Replace 'oscar' with the actual Ubuntu username (needs the vps2 SSH key)
-User=oscar
+# Replace 'youruser' with the actual Ubuntu username (needs the myserver SSH key)
+User=fleetwatch
 WorkingDirectory=/opt/fleet-watch
 EnvironmentFile=/opt/fleet-watch/fleet-watch.env
 ExecStart=/usr/bin/python3 /opt/fleet-watch/fleet_watch.py --config /opt/fleet-watch/config.json

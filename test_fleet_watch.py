@@ -150,35 +150,34 @@ class TestTelegram(unittest.TestCase):
     def test_chunk_failure_includes_context(self):
         with patch.object(
             fw.urllib.request, "urlopen", side_effect=OSError("boom")
-        ):
-            with self.assertRaises(RuntimeError) as ctx:
-                fw.send_telegram("tok", "123", "hello")
+        ), self.assertRaises(RuntimeError) as ctx:
+            fw.send_telegram("tok", "123", "hello")
         self.assertIn("chunk 1/1", str(ctx.exception))
 
 
 class TestSshChecks(unittest.TestCase):
     def test_file_age_ok(self):
-        cfg = {"name": "backup", "host": "vps2", "path": "/backup", "max_age_hours": 26}
+        cfg = {"name": "backup", "host": "myserver", "path": "/backup", "max_age_hours": 26}
         recent = fw.datetime.now(fw.timezone.utc).timestamp() - 3600
         with patch.object(fw, "run_cmd", return_value=(0, f"{recent}", "")):
             res = fw.check_ssh_file_age(cfg)
         self.assertEqual(res.status, fw.OK)
 
     def test_file_age_stale(self):
-        cfg = {"name": "backup", "host": "vps2", "path": "/backup", "max_age_hours": 26}
+        cfg = {"name": "backup", "host": "myserver", "path": "/backup", "max_age_hours": 26}
         old = fw.datetime.now(fw.timezone.utc).timestamp() - 80 * 3600
         with patch.object(fw, "run_cmd", return_value=(0, f"{old}", "")):
             res = fw.check_ssh_file_age(cfg)
         self.assertEqual(res.status, fw.FAIL)
 
     def test_file_age_no_files(self):
-        cfg = {"name": "backup", "host": "vps2", "path": "/backup", "max_age_hours": 26}
+        cfg = {"name": "backup", "host": "myserver", "path": "/backup", "max_age_hours": 26}
         with patch.object(fw, "run_cmd", return_value=(0, "", "")):
             res = fw.check_ssh_file_age(cfg)
         self.assertEqual(res.status, fw.FAIL)
 
     def test_ssh_ok_pass_and_fail(self):
-        cfg = {"name": "ollama up", "host": "vps2", "command": "true"}
+        cfg = {"name": "ollama up", "host": "myserver", "command": "true"}
         with patch.object(fw, "run_cmd", return_value=(0, "running", "")):
             self.assertEqual(fw.check_ssh_ok(cfg).status, fw.OK)
         with patch.object(fw, "run_cmd", return_value=(1, "", "not running")):
@@ -207,8 +206,8 @@ class TestReportAndDispatch(unittest.TestCase):
             ]
         }
         import io
-        import tempfile
         import os as _os
+        import tempfile
 
         with tempfile.NamedTemporaryFile(
             "w", suffix=".json", delete=False, encoding="utf-8"
@@ -216,9 +215,11 @@ class TestReportAndDispatch(unittest.TestCase):
             json.dump(config, fh)
             path = fh.name
         try:
-            with patch.object(fw.sys, "argv", ["fw", "--config", path, "--dry-run"]):
-                with patch.object(fw.sys, "stdout", io.StringIO()) as out:
-                    code = fw.main()
+            with (
+                patch.object(fw.sys, "argv", ["fw", "--config", path, "--dry-run"]),
+                patch.object(fw.sys, "stdout", io.StringIO()) as out,
+            ):
+                code = fw.main()
             self.assertEqual(code, 1)  # unknown type counts as FAIL
             self.assertIn("⏭", out.getvalue())  # disabled check is SKIP
         finally:
