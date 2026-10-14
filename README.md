@@ -22,6 +22,7 @@ day — with a few lines of config.
 | `http` | GET returns the expected status (+ optional body substring). |
 | `ssh_file_age` | Newest file under a remote path (e.g. a backup dir) is younger than `max_age_hours`. Requires GNU `find` on the remote. |
 | `ssh_ok` | A remote command exits 0 (e.g. a container is running). |
+| `fleet_queue` | Reads `heartbeat/<machine>.json` (`{"ts", "budget_pct"}`) from the queue repo via `gh api`: FAIL if missing or older than `stale_after_minutes` (default 30), WARN at `budget_pct` ≥ `budget_warn_pct` (default 90). Also lists open PRs labelled `fleet` under `owner` and open `decision` issues. GitHub/`gh` errors degrade to WARN. |
 
 ## Quickstart
 ```bash

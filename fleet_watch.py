@@ -22,10 +22,12 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 PSQL_TIMEOUT_S = 30
 SSH_TIMEOUT_S = 30
 HTTP_TIMEOUT_S = 15
+GH_TIMEOUT_S = 30
 TELEGRAM_CHUNK = 3800
 
 OK, WARN, FAIL, SKIP = "OK", "WARN", "FAIL", "SKIP"
@@ -212,7 +214,90 @@ def check_ssh_ok(cfg):
     return Result(cfg["name"], OK, detail)
 
 
+def run_gh(args):
+    """Run `gh api <args>`; returns (returncode, stdout, stderr). Never raises."""
+    return run_cmd(["gh", "api", *args], GH_TIMEOUT_S)
+
+
+def _parse_beat_ts(raw):
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+
+def _beat_budget_pct(data):
+    """Budget percentage from a heartbeat: nested fleet-queue shape first, flat fallback."""
+    budget = data.get("budget")
+    if isinstance(budget, dict):
+        return budget.get("pct")
+    return data.get("budget_pct")
+
+
+def check_fleet_queue(cfg, gh=run_gh, now=None):
+    """Fleet-queue watchdog: machine heartbeats, open fleet PRs, open decisions.
+
+    Heartbeats live in <repo>/heartbeat/<machine>.json as {"ts": ISO-8601,
+    "budget": {"pct": number}} (the fleet-queue dispatcher's shape; a flat
+    "budget_pct" is accepted too). `gh` is injectable for tests. Any API
+    trouble degrades to WARN; a stale or missing heartbeat is FAIL.
+    """
+    name, repo, owner = cfg["name"], cfg["repo"], cfg["owner"]
+    now = now or datetime.now(timezone.utc)
+    stale_min = cfg.get("stale_after_minutes", 30)
+    budget_warn = cfg.get("budget_warn_pct", 90)
+    fails, warns, infos = [], [], []
+
+    try:
+        for machine in cfg["machines"]:
+            code, out, err = gh([
+                f"repos/{repo}/contents/heartbeat/{machine}.json",
+                "-H", "Accept: application/vnd.github.raw",
+            ])
+            if code != 0:
+                if "404" in err or "Not Found" in err:
+                    fails.append(f"{machine}: heartbeat file missing")
+                else:
+                    warns.append(f"{machine}: heartbeat API error: {err.splitlines()[0][:100] if err else code}")
+                continue
+            try:
+                data = json.loads(out)
+                age_min = (now - _parse_beat_ts(data["ts"])).total_seconds() / 60.0
+                budget = _beat_budget_pct(data)
+            except (ValueError, KeyError, TypeError):
+                warns.append(f"{machine}: heartbeat unreadable")
+                continue
+            if age_min > stale_min:
+                fails.append(f"{machine}: heartbeat stale, {age_min:.0f} min old (limit {stale_min})")
+                continue
+            infos.append(f"{machine}: beat {age_min:.0f} min ago")
+            if budget is not None and budget >= budget_warn:
+                warns.append(f"{machine}: budget {budget}% (warn at {budget_warn}%)")
+
+        query = quote(f"is:pr is:open label:fleet user:{owner}", safe="")
+        code, out, err = gh([f"search/issues?q={query}"])
+        if code != 0:
+            warns.append(f"PR list unavailable: {err.splitlines()[0][:100] if err else code}")
+        else:
+            prs = json.loads(out).get("items", [])
+            infos.append(f"{len(prs)} open fleet PR")
+            for pr in prs:
+                infos.append(f"{pr['repository_url'].rsplit('/', 1)[-1]}: {pr['title']}")
+
+        code, out, err = gh([f"repos/{repo}/issues?labels=decision&state=open"])
+        if code != 0:
+            warns.append(f"decision list unavailable: {err.splitlines()[0][:100] if err else code}")
+        else:
+            issues = [i for i in json.loads(out) if "pull_request" not in i]
+            infos.append(f"{len(issues)} open decision")
+            for issue in issues:
+                infos.append(f"#{issue['number']} {issue['title']}")
+    except Exception as exc:  # API trouble must never take down the report
+        warns.append(f"fleet queue check error: {exc}")
+
+    status = FAIL if fails else WARN if warns else OK
+    return Result(name, status, "; ".join(fails + warns + infos))
+
+
 CHECK_TYPES = {
+    "fleet_queue": check_fleet_queue,
     "pg_cron": check_pg_cron,
     "freshness": check_freshness,
     "http": check_http,
