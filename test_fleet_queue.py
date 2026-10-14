@@ -12,8 +12,11 @@ import fleet_watch as fw
 NOW = datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc)
 
 
-def beat(minutes_old, budget_pct=10):
+def beat(minutes_old, budget_pct=10, nested=True):
+    """Heartbeat JSON; `nested` mirrors the dispatcher's {"budget": {"pct": n}} shape."""
     ts = (NOW - timedelta(minutes=minutes_old)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if nested:
+        return json.dumps({"ts": ts, "budget": {"pct": budget_pct, "used": 1, "daily": 10}})
     return json.dumps({"ts": ts, "budget_pct": budget_pct})
 
 
@@ -83,6 +86,23 @@ class TestFleetQueue(unittest.TestCase):
         res = self.run_check(make_gh(heartbeat=beat(1, budget_pct=92)))
         self.assertEqual(res.status, fw.WARN)
         self.assertIn("budget", res.detail)
+
+    def test_flat_budget_pct_still_warns(self):
+        res = self.run_check(make_gh(heartbeat=beat(1, budget_pct=95, nested=False)))
+        self.assertEqual(res.status, fw.WARN)
+        self.assertIn("budget 95%", res.detail)
+
+    def test_pr_search_uses_a_plain_api_path(self):
+        seen = []
+
+        def gh(args):
+            seen.append(args)
+            return make_gh(heartbeat=beat(1))(args)
+
+        self.run_check(gh)
+        search = [a for a in seen if a[0].startswith("search/issues")]
+        self.assertEqual(len(search), 1)
+        self.assertIn("label%3Afleet", search[0][0])
 
     def test_stale_beats_budget_warning(self):
         res = self.run_check(make_gh(heartbeat=beat(60, budget_pct=95)))

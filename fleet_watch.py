@@ -22,6 +22,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 PSQL_TIMEOUT_S = 30
 SSH_TIMEOUT_S = 30
@@ -222,12 +223,21 @@ def _parse_beat_ts(raw):
     return datetime.fromisoformat(raw.replace("Z", "+00:00"))
 
 
+def _beat_budget_pct(data):
+    """Budget percentage from a heartbeat: nested fleet-queue shape first, flat fallback."""
+    budget = data.get("budget")
+    if isinstance(budget, dict):
+        return budget.get("pct")
+    return data.get("budget_pct")
+
+
 def check_fleet_queue(cfg, gh=run_gh, now=None):
     """Fleet-queue watchdog: machine heartbeats, open fleet PRs, open decisions.
 
     Heartbeats live in <repo>/heartbeat/<machine>.json as {"ts": ISO-8601,
-    "budget_pct": number}. `gh` is injectable for tests. Any API trouble
-    degrades to WARN; a stale or missing heartbeat is FAIL.
+    "budget": {"pct": number}} (the fleet-queue dispatcher's shape; a flat
+    "budget_pct" is accepted too). `gh` is injectable for tests. Any API
+    trouble degrades to WARN; a stale or missing heartbeat is FAIL.
     """
     name, repo, owner = cfg["name"], cfg["repo"], cfg["owner"]
     now = now or datetime.now(timezone.utc)
@@ -250,7 +260,7 @@ def check_fleet_queue(cfg, gh=run_gh, now=None):
             try:
                 data = json.loads(out)
                 age_min = (now - _parse_beat_ts(data["ts"])).total_seconds() / 60.0
-                budget = data.get("budget_pct")
+                budget = _beat_budget_pct(data)
             except (ValueError, KeyError, TypeError):
                 warns.append(f"{machine}: heartbeat unreadable")
                 continue
@@ -261,10 +271,8 @@ def check_fleet_queue(cfg, gh=run_gh, now=None):
             if budget is not None and budget >= budget_warn:
                 warns.append(f"{machine}: budget {budget}% (warn at {budget_warn}%)")
 
-        code, out, err = gh([
-            "-X", "GET", "search/issues",
-            "-f", f"q=is:pr is:open label:fleet user:{owner}",
-        ])
+        query = quote(f"is:pr is:open label:fleet user:{owner}", safe="")
+        code, out, err = gh([f"search/issues?q={query}"])
         if code != 0:
             warns.append(f"PR list unavailable: {err.splitlines()[0][:100] if err else code}")
         else:
